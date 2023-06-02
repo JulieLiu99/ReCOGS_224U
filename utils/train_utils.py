@@ -18,6 +18,7 @@ from transformers import AutoModelForMaskedLM, AutoTokenizer, BertModel, BertCon
 from model.encoder_decoder_hf import EncoderDecoderConfig, EncoderDecoderModel
 from model.encoder_decoder_lstm import EncoderDecoderLSTMModel
 import pandas as pd  
+from torch import nn
 
 torch.cuda.empty_cache()
 
@@ -92,6 +93,13 @@ class COGSTrainer(object):
         if total_count == 0:
             return loss_sum / eval_step, 0
         return loss_sum / eval_step, correct_count / total_count
+
+    def compute_loss(self, inputs, outputs, return_outputs=False):
+        labels = inputs.get("labels") # torch.Size([128, 107]) batch_size x length_of_sentence 
+        logits = outputs.get("logits") # torch.Size([128, 107, 729]) batch_size x length_of_sentence x vocab_size
+        loss_fct = nn.CrossEntropyLoss()
+        loss = loss_fct(logits.permute(0, 2, 1), labels)
+        return (loss, outputs) if return_outputs else loss
     
     def train(
         self, train_dataloader, eval_dataloader,
@@ -118,8 +126,12 @@ class COGSTrainer(object):
                     if v is not None and isinstance(v, torch.Tensor):
                         inputs[k] = v.to(self.device)
                 outputs = self.model(**inputs)
-                loss = outputs.loss.mean() if self.n_gpu > 1 else outputs.loss
-                
+                # loss = outputs.loss.mean() if self.n_gpu > 1 else outputs.loss
+                # tensor(6.7808, grad_fn=<NllLossBackward0>)
+                loss = self.compute_loss(inputs, outputs).mean() if self.n_gpu > 1 else self.compute_loss(inputs, outputs) 
+                # give appromixately the same loss: tensor(6.7143, grad_fn=<NllLoss2DBackward0>)
+                if epoch == 0 and step == 0: print("loss", loss)
+
                 if total_step % log_step == 0 and self.is_wandb:
                     wandb.log(
                         {
