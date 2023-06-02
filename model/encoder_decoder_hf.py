@@ -35,6 +35,8 @@ from transformers import AutoModel, AutoModelForCausalLM
 from transformers import EncoderDecoderConfig
 from transformers.models.bert.modeling_bert import BertEmbeddings
 
+from utils.cogs_utils import *
+
 logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "EncoderDecoderConfig"
@@ -824,14 +826,29 @@ class EncoderDecoderModel(PreTrainedModel):
 
         # Compute loss independent from decoder (as some shift the logits inside them)
         loss = None
-        if labels is not None:
+        if labels is not None: # torch.Size([128, 109])
             warnings.warn(DEPRECATION_WARNING, FutureWarning)
-            logits = decoder_outputs.logits if return_dict else decoder_outputs[0]
+            logits = decoder_outputs.logits if return_dict else decoder_outputs[0] # torch.Size([128, 109, 729])
             loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
-            loss = loss_fct(
-                logits.reshape(-1, self.decoder.config.vocab_size), 
-                labels.view(-1), 
-            )
+            # loss = loss_fct(
+            #     logits.reshape(-1, self.decoder.config.vocab_size), 
+            #     labels.view(-1), 
+            # )
+
+            loss = torch.zeros([])
+            # vocab = load_vocab('./model/tgt_vocab.txt')
+            # print(vocab["AND"]) # 68
+            for labels_sentence, logits_sentence in zip(labels, logits): # torch.Size([109]), torch.Size([109, 729])
+                # if 68 in label_sentence: 
+                #     # for each word:
+                #     #   get min distance by comparing itself to every ground truth word in one-hot form (dot product)
+                #     #   loss += cross entropy of min distance pair
+                # else: 
+                #     #  loss += entropy 
+                sentence_entropy = loss_fct(logits_sentence.reshape(-1, self.decoder.config.vocab_size), labels_sentence.view(-1),)
+                if not torch.isnan(sentence_entropy):
+                    loss = torch.add(loss, sentence_entropy)
+            loss = loss/labels.shape[0] # tensor(6.7843, grad_fn=<DivBackward0>) close enough to the orignal tensor(6.7808, grad_fn=<NllLossBackward0>)
 
         if not return_dict:
             if loss is not None:
