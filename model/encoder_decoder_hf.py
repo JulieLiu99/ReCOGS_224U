@@ -857,7 +857,7 @@ class EncoderDecoderModel(PreTrainedModel):
             logits = logits[AND_row_indices, 1:, :]
 
             # # experiment: have the whole line containing "AND" as one clause
-            # # new loss tensor(341.1841, grad_fn=<DivBackward0>) vs original tensor(6.7808, grad_fn=<NllLossBackward0>)?
+            # # new loss tensor(341.1841, grad_fn=<DivBackward0>) vs original tensor(6.7808, grad_fn=<NllLossBackward0>) ??
             # logits = logits[:, None, :, :] # [bs, nt, nl, vocab_size]
             # labels = labels[:, None, :]
             # loss1 = chamferToken(
@@ -881,28 +881,26 @@ class EncoderDecoderModel(PreTrainedModel):
             pad_tuple_to_tensor = lambda tuple_data: torch.nn.functional.pad((torch.stack([torch.nn.functional.pad(t, (0,nl-len(t))) for t in tuple_data])), (0,0,0,nt-len(tuple_data)))
             pad_tuple_to_tensor_logit = lambda tuple_data: torch.nn.functional.pad((torch.stack([torch.nn.functional.pad(t, (0,0,0,nl-len(t))) for t in tuple_data])), (0,0,0,0,0,nt-len(tuple_data)))
             
+            # parse for pred
             pred = torch.stack([
                         pad_tuple_to_tensor(torch.tensor_split(row, (row == AND).nonzero(as_tuple=False).squeeze())) for row in torch.unbind(pred_copy, dim=0)
                     ], dim=0)
-
-            # right shift first clause by 1 and then remove values of AND
-            # because split does not remove AND
+            # right shift first clause by 1 and then remove AND's because split does not remove delimiter
             pred[:, 0, :] = torch.roll(pred[:, 0, :], shifts=1, dims=1)
             pred = pred[:,:,1:] 
 
+            # parse for labels
             labels = torch.stack([
                         pad_tuple_to_tensor(torch.tensor_split(row, (row == AND).nonzero(as_tuple=False).squeeze())) for row in torch.unbind(labels, dim=0)
                     ], dim=0)
             labels[:, 0, :] = torch.roll(labels[:, 0, :], shifts=1, dims=1)
             labels = labels[:,:,1:] 
 
-            # true where there is padding, false otherwise
+            # masks: true where there is padding, false otherwise
             mask_logits = torch.where(pred == 0, torch.tensor(1), torch.tensor(0)) # torch.Size([116, 7, 106])
             mask_labels = torch.where(labels == 0, torch.tensor(1), torch.tensor(0))
 
-            vocab_size = logits.shape[-1]
-            pad_tuple_to_tensor = lambda tuple_data: torch.nn.functional.pad((torch.stack([torch.nn.functional.pad(t, (0,nl-len(t)+1)) for t in tuple_data])), (0,0,0,nt-len(tuple_data)))
-
+            # parse for tensor
             logits = torch.stack([
                         pad_tuple_to_tensor_logit(torch.split(row_l, torch.nonzero(row_p == AND).squeeze().tolist() or nl)) for row_l, row_p in zip(torch.unbind(logits, dim=0), torch.unbind(pred, dim=0))
                     ], dim=0) 
