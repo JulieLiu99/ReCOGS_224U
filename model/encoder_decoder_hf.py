@@ -855,50 +855,69 @@ class EncoderDecoderModel(PreTrainedModel):
             labels = labels[AND_row_indices, 1:] 
             logits = logits[AND_row_indices, 1:, :]
 
-            # experiment: have the whole line containing "AND" as one clause
-            # new loss tensor(341.1841, grad_fn=<DivBackward0>) vs original tensor(6.7808, grad_fn=<NllLossBackward0>)?
-            logits = logits[:, None, :, :] # [bs, nt, nl, vocab_size]
-            labels = labels[:, None, :]
-            loss1 = chamferToken(
-                loss_fn = CrossEntropyLoss(ignore_index=self.config.pad_token_id, reduction = 'none'),
-                a = logits,
-                b = labels,
-                mask_a = torch.zeros_like(labels),
-                mask_b = torch.zeros_like(labels)
-                )
-
-            # # getting clauses separated by "AND" and pad to the same size
-            # # for now did not find torch operation to split in dim=1, using one hot from pred for logit
-            # # however, in cross_entropy: "softmax_kernel_impl" not implemented for 'Long'?
-            # nt = torch.unique(AND_indices[:, 0], return_counts=True)[1].max()
-            # nl = labels.shape[1] # right now, max clause length is length of sentence
-            # pred = torch.argmax(logits, dim=-1) # torch.Size([116, 107]) 
-            # pad_tuple_to_tensor = lambda tuple_data: torch.nn.functional.pad((torch.stack([torch.nn.functional.pad(t, (0,nl-len(t)+1)) for t in tuple_data])), (0,0,0,nt-len(tuple_data)))
-            # pred = torch.stack([
-            #             pad_tuple_to_tensor(torch.tensor_split(row, (row == 68).nonzero(as_tuple=False).squeeze())) for row in torch.unbind(pred, dim=0)
-            #         ], dim=0)
-            # # right shift first clause by 1 and then remove values of 68
-            # pred[:, 0, :] = torch.roll(pred[:, 0, :], shifts=1, dims=1)
-            # pred = pred[:,:,1:] # torch.Size([116, 1, 107])
-
-            # labels = torch.stack([
-            #             pad_tuple_to_tensor(torch.tensor_split(row, (row == 68).nonzero(as_tuple=False).squeeze())) for row in torch.unbind(labels, dim=0)
-            #         ], dim=0)
-            # labels[:, 0, :] = torch.roll(labels[:, 0, :], shifts=1, dims=1)
-            # labels = labels[:,:,1:] 
-
-            # # true where there is padding, false otherwise
-            # mask_logits = torch.where(pred == 0, torch.tensor(1), pred) # torch.Size([116, 7, 106])
-            # mask_labels = torch.where(labels == 0, torch.tensor(1), labels)
-
-            # logits = torch.nn.functional.one_hot(pred, logits.shape[-1]) # torch.Size([116, 7, 106, 729])
+            # # experiment: have the whole line containing "AND" as one clause
+            # # new loss tensor(341.1841, grad_fn=<DivBackward0>) vs original tensor(6.7808, grad_fn=<NllLossBackward0>)?
+            # logits = logits[:, None, :, :] # [bs, nt, nl, vocab_size]
+            # labels = labels[:, None, :]
             # loss1 = chamferToken(
             #     loss_fn = CrossEntropyLoss(ignore_index=self.config.pad_token_id, reduction = 'none'),
             #     a = logits,
             #     b = labels,
-            #     mask_a = mask_logits,
-            #     mask_b = mask_labels
+            #     mask_a = torch.zeros_like(labels),
+            #     mask_b = torch.zeros_like(labels)
             #     )
+
+            # getting clauses separated by "AND" and pad to the same size
+            # in chamfer loss in cross_entropy: "softmax_kernel_impl" not implemented for 'Long'?
+            nt = torch.unique(AND_indices[:, 0], return_counts=True)[1].max()
+            nl = labels.size(1) # right now, max clause length is length of sentence
+
+            # for logits, we need to get the predicted token 
+            pred_copy = torch.argmax(logits, dim=-1) # torch.Size([116, 107]) 
+
+            # when we split a row into clauses, output is a tuple of tensors with different sizes
+            # these are to pad them into even sizes and stack them into a tensor
+            pad_tuple_to_tensor = lambda tuple_data: torch.nn.functional.pad((torch.stack([torch.nn.functional.pad(t, (0,nl-len(t))) for t in tuple_data])), (0,0,0,nt-len(tuple_data)))
+            pad_tuple_to_tensor_logit = lambda tuple_data: torch.nn.functional.pad((torch.stack([torch.nn.functional.pad(t, (0,0,0,nl-len(t))) for t in tuple_data])), (0,0,0,0,0,nt-len(tuple_data)))
+            
+            pred = torch.stack([
+                        pad_tuple_to_tensor(torch.tensor_split(row, (row == 68).nonzero(as_tuple=False).squeeze())) for row in torch.unbind(pred_copy, dim=0)
+                    ], dim=0)
+
+            # right shift first clause by 1 and then remove values of 68
+            # because split does not remove AND
+            pred[:, 0, :] = torch.roll(pred[:, 0, :], shifts=1, dims=1)
+            pred = pred[:,:,1:] # torch.Size([116, 1, 107])
+
+            labels = torch.stack([
+                        pad_tuple_to_tensor(torch.tensor_split(row, (row == 68).nonzero(as_tuple=False).squeeze())) for row in torch.unbind(labels, dim=0)
+                    ], dim=0)
+            labels[:, 0, :] = torch.roll(labels[:, 0, :], shifts=1, dims=1)
+            labels = labels[:,:,1:] 
+
+            # true where there is padding, false otherwise
+            mask_logits = torch.where(pred == 0, torch.tensor(1), torch.tensor(0)) # torch.Size([116, 7, 106])
+            mask_labels = torch.where(labels == 0, torch.tensor(1), torch.tensor(0))
+
+            vocab_size = logits.shape[-1]
+            pad_tuple_to_tensor = lambda tuple_data: torch.nn.functional.pad((torch.stack([torch.nn.functional.pad(t, (0,nl-len(t)+1)) for t in tuple_data])), (0,0,0,nt-len(tuple_data)))
+
+            logits = torch.stack([
+                        pad_tuple_to_tensor_logit(torch.split(row_l, torch.nonzero(row_p == 68).squeeze().tolist() or nl)) for row_l, row_p in zip(torch.unbind(logits, dim=0), torch.unbind(pred, dim=0))
+                    ], dim=0) 
+            logits[:, 0, :, :] = torch.roll(logits[:, 0, :, :], shifts=1, dims=1)
+            logits = logits[:,:,1:,:] # torch.Size([116, 7, 105, 729])
+
+            # print(logits.shape, labels.shape, mask_logits.shape, mask_labels.shape)
+            # torch.Size([116, 7, 105, 729]) torch.Size([116, 7, 105]) torch.Size([116, 7, 105]) torch.Size([116, 7, 105])
+
+            loss1 = chamferToken(
+                loss_fn = CrossEntropyLoss(ignore_index=self.config.pad_token_id, reduction = 'none'),
+                a = logits,
+                b = labels,
+                mask_a = mask_logits,
+                mask_b = mask_labels
+                )
 
             loss = (loss1 * AND_row_indices.shape[0] + loss2 * no_AND_row_indices.shape[0]) / (AND_row_indices.shape[0] + no_AND_row_indices.shape[0])
             print("new loss", loss) 
