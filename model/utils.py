@@ -2,8 +2,56 @@ import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torch import Tensor 
+from jaxtyping import Shaped
+from typing import Callable
 
-
+def chamferToken(loss_fn: Callable , 
+                 a: Shaped[Tensor, "bs nt nl vs"], 
+                 b: Shaped[Tensor, "bs nt nl"], 
+                 mask_a: Shaped[Tensor, "bs nt nl"], 
+                 mask_b: Shaped[Tensor, "bs nt nl"],
+                 reduce: bool=True):
+    """
+    chamfer dist for tokens
+    loss_fn: loss function that computes distance between tokens
+    a: [bs, nt, nl, vocab_size] number of tokens, max length
+    b: [bs, nt, nl]
+    mask_a, mask_b: [bs, nt, nl], mask of valid tokens
+    reduce: if reduce, will return the averaged number
+    NOTE: loss_fn should NOT output averaged elements, and should NOT ignore indices. 
+    ignored indices should be indicated in masks
+    """
+    bs, nt, nl, vs = a.shape
+    # for each token in a, get the min dist in b  
+    token_mask_a, token_mask_b = mask_a.sum(-1) == nl, mask_b.sum(-1) == nl
+    num_unmasked_a, num_unmasked_b = nl - mask_a.sum(-1), nl - mask_b.sum(-1) 
+    num_unmasked_a = torch.where(num_unmasked_a == 0, nl, num_unmasked_a)
+    num_unmasked_b = torch.where(num_unmasked_b == 0, nl, num_unmasked_b)
+    _a = a.unsqueeze(2).repeat_interleave(nt, dim=2).permute(0, 1, 4, 2, 3).reshape(bs*nt, vs, nt, nl) # [bs, nt, vs, nt, nl]
+    _b = b.unsqueeze(1).repeat_interleave(nt, dim=1).reshape(bs*nt, nt, nl) #[bs, nt, nt, nl]
+    a_loss = loss_fn(_a, _b).reshape(bs, nt, nt, nl) # [bs* nt, nt, nl]
+    a_loss = a_loss.masked_fill(mask_b.reshape(bs, 1, nt, nl), value=0).sum(-1) / num_unmasked_b.unsqueeze(1)
+    a_loss = a_loss.masked_fill(token_mask_b.unsqueeze(1), value=1e9)
+    a_loss = a_loss.min(-1)[0] # [bs, nt]
+    a_loss = a_loss.masked_fill(token_mask_a, value=0)
+    if reduce:
+        a_loss = a_loss.sum(-1) / (nt - token_mask_a.sum(-1))
+    
+    _a = a.unsqueeze(1).repeat_interleave(nt, dim=1).permute(0, 1, 4, 2, 3).reshape(bs*nt, vs, nt, nl) # [bs, nt, vs, nt, nl]
+    _b = b.unsqueeze(2).repeat_interleave(nt, dim=2).reshape(bs*nt, nt, nl) #[bs, nt, nt, nl]
+    b_loss = loss_fn(_a, _b).reshape(bs, nt, nt, nl) # [bs* nt, nt, nl]
+    b_loss = b_loss.masked_fill(mask_a.reshape(bs, 1, nt, nl), value=0).sum(-1) / num_unmasked_a.unsqueeze(1)
+    b_loss = b_loss.masked_fill(token_mask_a.unsqueeze(1), value=1e9)
+    b_loss = b_loss.min(-1)[0] # [bs, nt]
+    b_loss = b_loss.masked_fill(token_mask_b, value=0)
+    if reduce:
+        b_loss = b_loss.sum(-1) / (nt - token_mask_b.sum(-1))
+        
+    loss = a_loss + b_loss 
+    if reduce:
+        return loss.mean()
+    return loss
 
 class AverageMeter(object):
     def __init__(self):
