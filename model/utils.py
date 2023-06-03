@@ -34,23 +34,23 @@ def chamferToken(loss_fn: Callable[..., Tensor],
     _a = a.unsqueeze(2).repeat_interleave(nt, dim=2).permute(0, 1, 4, 2, 3).reshape(bs*nt, vs, nt, nl) # [bs, nt, vs, nt, nl]
     _b = b.unsqueeze(1).repeat_interleave(nt, dim=1).reshape(bs*nt, nt, nl) #[bs, nt, nt, nl]
     a_loss = loss_fn(_a, _b).reshape(bs, nt, nt, nl) # [bs* nt, nt, nl]
-    a_loss = a_loss.masked_fill(mask_b.reshape(bs, 1, nt, nl), value=0).sum(-1) / num_unmasked_b.unsqueeze(1)
+    a_loss = torch.nansum(a_loss.masked_fill(mask_b.reshape(bs, 1, nt, nl), value=0), dim = -1) / num_unmasked_b.unsqueeze(1)
     a_loss = a_loss.masked_fill(token_mask_b.unsqueeze(1), value=1e9)
     a_loss = a_loss.min(-1)[0] # [bs, nt]
     a_loss = a_loss.masked_fill(token_mask_a, value=0)
     if reduce:
-        a_loss = a_loss.sum(-1) / (nt - token_mask_a.sum(-1))
+        a_loss = torch.nansum(a_loss, dim=-1) / (nt - token_mask_a.sum(-1))
     
     _a = a.unsqueeze(1).repeat_interleave(nt, dim=1).permute(0, 1, 4, 2, 3).reshape(bs*nt, vs, nt, nl) # [bs, nt, vs, nt, nl]
     _b = b.unsqueeze(2).repeat_interleave(nt, dim=2).reshape(bs*nt, nt, nl) #[bs, nt, nt, nl]
     b_loss = loss_fn(_a, _b).reshape(bs, nt, nt, nl) # [bs* nt, nt, nl]
-    b_loss = b_loss.masked_fill(mask_a.reshape(bs, 1, nt, nl), value=0).sum(-1) / num_unmasked_a.unsqueeze(1)
+    b_loss = torch.nansum(b_loss.masked_fill(mask_a.reshape(bs, 1, nt, nl), value=0), dim = -1) / num_unmasked_a.unsqueeze(1)
     b_loss = b_loss.masked_fill(token_mask_a.unsqueeze(1), value=1e9)
     b_loss = b_loss.min(-1)[0] # [bs, nt]
     b_loss = b_loss.masked_fill(token_mask_b, value=0)
     if reduce:
-        b_loss = b_loss.sum(-1) / (nt - token_mask_b.sum(-1))
-        
+        b_loss = torch.nansum(a_loss, dim=-1) / (nt - token_mask_b.sum(-1))
+    
     loss = a_loss + b_loss 
     if reduce:
         return loss.mean()

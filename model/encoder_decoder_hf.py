@@ -35,6 +35,9 @@ from transformers import AutoModel, AutoModelForCausalLM
 from transformers import EncoderDecoderConfig
 from transformers.models.bert.modeling_bert import BertEmbeddings
 
+from utils.cogs_utils import *
+from model.utils import chamferToken
+
 logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "EncoderDecoderConfig"
@@ -824,14 +827,57 @@ class EncoderDecoderModel(PreTrainedModel):
 
         # Compute loss independent from decoder (as some shift the logits inside them)
         loss = None
-        if labels is not None:
+        if labels is not None: # torch.Size([128, 109])
             warnings.warn(DEPRECATION_WARNING, FutureWarning)
-            logits = decoder_outputs.logits if return_dict else decoder_outputs[0]
+            logits = decoder_outputs.logits if return_dict else decoder_outputs[0] # torch.Size([128, 109, 729])
+            # loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
+            # loss = loss_fct(
+            #     logits.reshape(-1, self.decoder.config.vocab_size), 
+            #     labels.view(-1), 
+            # )
+
+            AND_indices = (labels == 68).nonzero(as_tuple=False) # torch.Size([338, 2])
+            AND_row_indices = AND_indices[:, 0].unique() # row indices of "AND" occurrences
+
+            labels = labels[AND_row_indices, :] # labels only with rows with "AND"
+            logits = logits[AND_row_indices, :, :] # logits only with rows with "AND"
+
+            # for now just have the whole line containing "AND" as one clause
+            logits = logits[:, None, :, :] # [bs, nt, nl, vocab_size]
+            labels = labels[:, None, :]
+
+            # also not sure how mask_a and mask_b are different, if we only detect "AND" from ground truth
+            loss1 = chamferToken(
+                loss_fn = CrossEntropyLoss(ignore_index=self.config.pad_token_id, reduction = 'none'),
+                a = logits,
+                b = labels,
+                mask_a = torch.zeros_like(labels),
+                mask_b = torch.zeros_like(labels)
+                )
+
+            # # getting precise clauses separated by "AND"
+            # nl = labels.shape[1]# there is probably a more precise way
+
+            # pred = torch.argmax(logits, dim=-1) # torch.Size([338, 107])
+            # pad_tuple_to_tensor = lambda tuple_data: torch.stack([torch.nn.functional.pad(t, (0, nl - len(t))) for t in tuple_data])
+            # pred = torch.stack([
+            #             pad_tuple_to_tensor(torch.tensor_split(row, (row == 68).nonzero(as_tuple=False).squeeze())) for row in torch.unbind(pred, dim=0)
+            #         ], dim=0)
+
+            # # right shift first clause by 1 and then remove values of 68
+            # pred[:, 0, :] = torch.roll(pred[:, 0, :], shifts=1, dims=1)
+            # pred = pred[:,:,1:]
+
+            no_AND_row_indices = (labels != 68).nonzero(as_tuple=False)[:, 0].unique()
             loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
-            loss = loss_fct(
-                logits.reshape(-1, self.decoder.config.vocab_size), 
-                labels.view(-1), 
+            loss2 = loss_fct(
+                logits[no_AND_row_indices, :, :].reshape(-1, self.decoder.config.vocab_size), 
+                labels[no_AND_row_indices, :] .view(-1), 
             )
+
+            loss = (loss1 * AND_row_indices.shape[0] + loss2 * no_AND_row_indices.shape[0]) / (AND_row_indices.shape[0] + no_AND_row_indices.shape[0])
+            print("new loss", loss) # new loss tensor(193.1254, grad_fn=<DivBackward0>) vs original tensor(6.7808, grad_fn=<NllLossBackward0>)
+
 
         if not return_dict:
             if loss is not None:
