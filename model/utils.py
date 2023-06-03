@@ -6,13 +6,16 @@ from torch import Tensor
 from jaxtyping import Shaped
 from typing import Callable
 
-def chamferToken(loss_fn: Callable , 
+def chamferToken(loss_fn: Callable[..., Tensor], 
                  a: Shaped[Tensor, "bs nt nl vs"], 
                  b: Shaped[Tensor, "bs nt nl"], 
                  mask_a: Shaped[Tensor, "bs nt nl"], 
                  mask_b: Shaped[Tensor, "bs nt nl"],
                  reduce: bool=True):
     """
+    bs: batch size 
+    nt: max number of conj clauses
+    nl: max length of each conj sentences
     chamfer dist for tokens
     loss_fn: loss function that computes distance between tokens
     a: [bs, nt, nl, vocab_size] number of tokens, max length
