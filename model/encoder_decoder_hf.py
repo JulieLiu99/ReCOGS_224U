@@ -895,7 +895,7 @@ class EncoderDecoderModel(PreTrainedModel):
             labels = labels[:,:,1:] 
 
             # masks: true where there is padding, false otherwise
-            mask_logits = torch.where(pred == 0, torch.tensor(1), torch.tensor(0)) # torch.Size([116, 7, 106])
+            mask_logits = torch.where(pred == 0, torch.tensor(1), torch.tensor(0)) # torch.Size([116, 8, 106])
             mask_labels = torch.where(labels == 0, torch.tensor(1), torch.tensor(0))
 
             # parse for tensor
@@ -906,10 +906,10 @@ class EncoderDecoderModel(PreTrainedModel):
             logits = logits[:,:,1:,:]
 
             # print(logits.shape, labels.shape, mask_logits.shape, mask_labels.shape)
-            # torch.Size([116, 7, 105, 729]) torch.Size([116, 7, 105]) torch.Size([116, 7, 105]) torch.Size([116, 7, 105])
+            # torch.Size([116, 8, 105, 729]) torch.Size([116, 8, 105]) torch.Size([116, 8, 105]) torch.Size([116, 8, 105])
 
             loss1 = chamferToken(
-                loss_fn = CrossEntropyLoss(ignore_index=self.config.pad_token_id, reduction = 'none'),
+                loss_fn = CrossEntropyLoss(reduction = 'none'),
                 a = logits,
                 b = labels,
                 mask_a = mask_logits,
