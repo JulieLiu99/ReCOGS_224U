@@ -46,6 +46,7 @@ if __name__ == '__main__':
         cmd.add_argument('--save_after_epoch', type=int, default=None)
         cmd.add_argument('--lfs', default="cogs", type=str, help='')
         cmd.add_argument('--model_name', default="cogs", type=str, help='')
+        cmd.add_argument('--loss_type', default="original", type=str, help='choose from [original, chamfer]')
         
         args = cmd.parse_args(sys.argv[1:])
     except:
@@ -69,6 +70,7 @@ if __name__ == '__main__':
         args.epochs = 200
         args.warm_up = 0.1
         args.is_wandb = False
+        args.loss_type = "original"
         args.log_step = 10
         # args.valid_steps = 500 # -1 not do training eval!
         args.valid_steps = -1
@@ -212,6 +214,7 @@ for lf in args.lfs.split(";"):
             model_config.decoder_start_token_id = config_encoder.bos_token_id
             model_config.pad_token_id = config_encoder.pad_token_id
             model_config.eos_token_id = config_encoder.eos_token_id
+            model_config.loss_type = args.loss_type
             model = EncoderDecoderModel(config=model_config)
         elif model_name == "ende_lstm":
             logging.info("Baselining the LSTM Encoder-Decoder Model")

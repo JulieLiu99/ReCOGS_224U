@@ -41,6 +41,7 @@ from model.utils import chamferToken
 logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "EncoderDecoderConfig"
+AND = 68
 
 DEPRECATION_WARNING = (
     "Version v4.12.0 introduces a better way to train encoder-decoder models by computing the loss inside the"
@@ -396,6 +397,9 @@ class EncoderDecoderModel(PreTrainedModel):
         # so that the updates to the config will be synced
         self.encoder.config = self.config.encoder
         self.decoder.config = self.config.decoder
+        self.loss_type = self.config.loss_type
+        assert self.loss_type in ["original", "chamfer"]
+        print(f"USING LOSS TYPE {self.loss_type}")
         
         # override the embeddings to be sinusoidal
         try:
@@ -830,91 +834,91 @@ class EncoderDecoderModel(PreTrainedModel):
         if labels is not None: # torch.Size([128, 109])
             warnings.warn(DEPRECATION_WARNING, FutureWarning)
             logits = decoder_outputs.logits if return_dict else decoder_outputs[0] # torch.Size([batch_size, sentence_length, vocab_size])
-            # loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
-            # loss = loss_fct(
-            #     logits.reshape(-1, self.decoder.config.vocab_size), 
-            #     labels.view(-1), 
-            # )
+            if self.loss_type == "original":
+                loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
+                loss = loss_fct(
+                    logits.reshape(-1, self.decoder.config.vocab_size), 
+                    labels.view(-1), 
+                )
             # print("Original loss:", loss) # Original loss: tensor(6.7787, grad_fn=<NllLossBackward0>)
 
             ################################# Loss of rows without AND #####################################
+            elif self.loss_type == "chamfer":
+                AND_row_indices = torch.nonzero(labels.eq(AND), as_tuple=True)[0].unique()
+                no_AND_row_indices = torch.masked_select(torch.arange(labels.size(0)), ~torch.isin(torch.arange(labels.size(0)), AND_row_indices))
 
-            AND = 68
-            AND_row_indices = torch.nonzero(labels.eq(AND), as_tuple=True)[0].unique()
-            no_AND_row_indices = torch.masked_select(torch.arange(labels.size(0)), ~torch.isin(torch.arange(labels.size(0)), AND_row_indices))
+                loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
+                loss2 = loss_fct(
+                    logits[no_AND_row_indices, :, :].reshape(-1, self.decoder.config.vocab_size), 
+                    labels[no_AND_row_indices, :].view(-1), 
+                )
 
-            loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
-            loss2 = loss_fct(
-                logits[no_AND_row_indices, :, :].reshape(-1, self.decoder.config.vocab_size), 
-                labels[no_AND_row_indices, :].view(-1), 
-            )
+                ################################# Parse for rows with AND #####################################
 
-            ################################# Parse for rows with AND #####################################
+                labels = labels[AND_row_indices, 1:] # get rid of [BOS]
+                logits = logits[AND_row_indices, 1:, :]
 
-            labels = labels[AND_row_indices, 1:] # get rid of [BOS]
-            logits = logits[AND_row_indices, 1:, :]
+                pred = torch.argmax(logits, dim=-1) 
 
-            pred = torch.argmax(logits, dim=-1) 
+                AND_in_labels = torch.where(labels == AND, torch.tensor(1), torch.tensor(0))
+                AND_in_pred = torch.where(pred == AND, torch.tensor(1), torch.tensor(0))
 
-            AND_in_labels = torch.where(labels == AND, torch.tensor(1), torch.tensor(0))
-            AND_in_pred = torch.where(pred == AND, torch.tensor(1), torch.tensor(0))
+                max_AND_per_row = torch.max(AND_in_labels.sum(dim=1), AND_in_pred.sum(dim=1)).max().item()
+                nt = max_AND_per_row * 2 + 1
+                bs, nl, vs = logits.shape # nl = sentence length
 
-            max_AND_per_row = torch.max(AND_in_labels.sum(dim=1), AND_in_pred.sum(dim=1)).max().item()
-            nt = max_AND_per_row * 2 + 1
-            bs, nl, vs = logits.shape # nl = sentence length
+                ################################# Map based on labels #####################################
 
-            ################################# Map based on labels #####################################
+                # x is indices of clauses
+                diff = torch.cat((torch.zeros((bs, 1), dtype=torch.bool), AND_in_labels[:, 1:] != AND_in_labels[:, :-1]), dim=1)
+                x = torch.cumsum(diff, dim=1)
 
-            # x is indices of clauses
-            diff = torch.cat((torch.zeros((bs, 1), dtype=torch.bool), AND_in_labels[:, 1:] != AND_in_labels[:, :-1]), dim=1)
-            x = torch.cumsum(diff, dim=1)
+                # y is indices of token within each clause
+                y = torch.zeros_like(AND_in_labels)
+                for i in range(bs):
+                    y[i, :] = torch.cat([torch.arange(n) for n in torch.unique_consecutive(AND_in_labels[i], return_counts=True)[1].tolist()])
 
-            # y is indices of token within each clause
-            y = torch.zeros_like(AND_in_labels)
-            for i in range(bs):
-                y[i, :] = torch.cat([torch.arange(n) for n in torch.unique_consecutive(AND_in_labels[i], return_counts=True)[1].tolist()])
+                rows = torch.arange(bs).unsqueeze(-1).repeat(1, nl).flatten()
 
-            rows = torch.arange(bs).unsqueeze(-1).repeat(1, nl).flatten()
+                labels_3D = torch.zeros(bs, nt, nl).long()
+                labels_3D[rows, x.flatten(), y.flatten()] = labels.flatten()
 
-            labels_3D = torch.zeros(bs, nt, nl).long()
-            labels_3D[rows, x.flatten(), y.flatten()] = labels.flatten()
+                ################################# Map based on pred #####################################
 
-            ################################# Map based on pred #####################################
+                diff = torch.cat((torch.zeros((bs, 1), dtype=torch.bool), AND_in_pred[:, 1:] != AND_in_pred[:, :-1]), dim=1)
+                x = torch.cumsum(diff, dim=1)
 
-            diff = torch.cat((torch.zeros((bs, 1), dtype=torch.bool), AND_in_pred[:, 1:] != AND_in_pred[:, :-1]), dim=1)
-            x = torch.cumsum(diff, dim=1)
+                y = torch.zeros_like(AND_in_pred)
+                for i in range(bs):
+                    y[i, :] = torch.cat([torch.arange(n) for n in torch.unique_consecutive(AND_in_pred[i], return_counts=True)[1].tolist()])
 
-            y = torch.zeros_like(AND_in_pred)
-            for i in range(bs):
-                y[i, :] = torch.cat([torch.arange(n) for n in torch.unique_consecutive(AND_in_pred[i], return_counts=True)[1].tolist()])
+                rows = torch.arange(bs).unsqueeze(-1).repeat(1, nl).flatten()
 
-            rows = torch.arange(bs).unsqueeze(-1).repeat(1, nl).flatten()
+                pred_3D = torch.zeros(bs, nt, nl).long()
+                pred_3D[rows, x.flatten(), y.flatten()] = pred.flatten()
 
-            pred_3D = torch.zeros(bs, nt, nl).long()
-            pred_3D[rows, x.flatten(), y.flatten()] = pred.flatten()
+                logits_4D = torch.zeros(bs, nt, nl, vs)
+                logits_4D[rows, x.flatten(), y.flatten()] = logits.reshape(rows.shape[0], -1).float()
 
-            logits_4D = torch.zeros(bs, nt, nl, vs)
-            logits_4D[rows, x.flatten(), y.flatten()] = logits.reshape(rows.shape[0], -1).float()
+                # True where there is padding, False otherwise
+                mask_logits = torch.where(pred_3D == 0, torch.tensor(1), torch.tensor(0))
+                mask_labels = torch.where(labels_3D == 0, torch.tensor(1), torch.tensor(0))
 
-            # True where there is padding, False otherwise
-            mask_logits = torch.where(pred_3D == 0, torch.tensor(1), torch.tensor(0))
-            mask_labels = torch.where(labels_3D == 0, torch.tensor(1), torch.tensor(0))
+                # print(logits_4D.shape, labels_3D.shape, mask_logits.shape, mask_labels.shape)
+                # torch.Size([116, 15, 106, 729]) torch.Size([116, 15, 106]) torch.Size([116, 15, 106]) torch.Size([116, 15, 106])
 
-            # print(logits_4D.shape, labels_3D.shape, mask_logits.shape, mask_labels.shape)
-            # torch.Size([116, 15, 106, 729]) torch.Size([116, 15, 106]) torch.Size([116, 15, 106]) torch.Size([116, 15, 106])
+                loss1 = chamferToken(
+                    loss_fn = CrossEntropyLoss(reduction = 'none'),
+                    a = logits_4D,
+                    b = labels_3D,
+                    mask_a = mask_logits,
+                    mask_b = mask_labels,
+                    reduce = True
+                    ) # Chamfer loss takes the most time
 
-            loss1 = chamferToken(
-                loss_fn = CrossEntropyLoss(reduction = 'none'),
-                a = logits_4D,
-                b = labels_3D,
-                mask_a = mask_logits,
-                mask_b = mask_labels,
-                reduce = True
-                ) # Chamfer loss takes the most time
-
-            # divide Chamfer loss by 2 because it's sum of two way loss
-            loss = (loss1/2 * AND_row_indices.size(0) + loss2 * no_AND_row_indices.size(0)) / (AND_row_indices.size(0) + no_AND_row_indices.size(0))
-            # print("new loss", loss) # new loss tensor(6.6666, grad_fn=<DivBackward0>)
+                # divide Chamfer loss by 2 because it's sum of two way loss
+                loss = (loss1/2 * AND_row_indices.size(0) + loss2 * no_AND_row_indices.size(0)) / (AND_row_indices.size(0) + no_AND_row_indices.size(0))
+                # print("new loss", loss) # new loss tensor(6.6666, grad_fn=<DivBackward0>)
 
 
         if not return_dict:
