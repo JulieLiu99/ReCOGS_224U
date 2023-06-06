@@ -604,6 +604,7 @@ class EncoderDecoderModel(PreTrainedModel):
 
         model = super().from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
         model.loss_type = loss_type
+        return model
 
     @classmethod
     def from_encoder_decoder_pretrained(
@@ -741,7 +742,6 @@ class EncoderDecoderModel(PreTrainedModel):
 
         # instantiate config with corresponding kwargs
         config = EncoderDecoderConfig.from_encoder_decoder_configs(encoder.config, decoder.config, **kwargs)
-        print(loss_type)
         return cls(encoder=encoder, decoder=decoder, config=config, loss_type=loss_type)
 
     @add_start_docstrings_to_model_forward(ENCODER_DECODER_INPUTS_DOCSTRING)
