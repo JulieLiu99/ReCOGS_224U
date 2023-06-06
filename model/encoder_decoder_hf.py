@@ -19,7 +19,7 @@ import gc
 import os, math
 import tempfile
 import warnings
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Literal
 
 import torch
 from torch import nn
@@ -361,6 +361,7 @@ class EncoderDecoderModel(PreTrainedModel):
         config: Optional[PretrainedConfig] = None,
         encoder: Optional[PreTrainedModel] = None,
         decoder: Optional[PreTrainedModel] = None,
+        loss_type: Literal["original", "chamfer"]="original"
     ):
         if config is None and (encoder is None or decoder is None):
             raise ValueError("Either a configuration or an encoder and a decoder has to be provided.")
@@ -397,7 +398,7 @@ class EncoderDecoderModel(PreTrainedModel):
         # so that the updates to the config will be synced
         self.encoder.config = self.config.encoder
         self.decoder.config = self.config.decoder
-        self.loss_type = self.config.loss_type
+        self.loss_type = loss_type
         assert self.loss_type in ["original", "chamfer"]
         print(f"USING LOSS TYPE {self.loss_type}")
         

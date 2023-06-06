@@ -215,8 +215,7 @@ for lf in args.lfs.split(";"):
             model_config.decoder_start_token_id = config_encoder.bos_token_id
             model_config.pad_token_id = config_encoder.pad_token_id
             model_config.eos_token_id = config_encoder.eos_token_id
-            model_config.loss_type = args.loss_type
-            model = EncoderDecoderModel(config=model_config)
+            model = EncoderDecoderModel(config=model_config, loss_type=args.loss_type)
         elif model_name == "ende_lstm":
             logging.info("Baselining the LSTM Encoder-Decoder Model")
             model_config = EncoderDecoderConfig.from_encoder_decoder_configs(
