@@ -228,7 +228,7 @@ for lf in args.lfs.split(";"):
             
         if args.model_path is not None and model_name == "ende_transformer":
             logging.info("Loading pretrained model.")
-            model = model.from_pretrained(args.model_path)
+            model = model.from_pretrained(args.model_path, loss_type=args.loss_type)
         elif args.model_path is not None and model_name == "ende_lstm":
             logging.info("Loading pretrained model.")
             raw_weights = torch.load(os.path.join(args.model_path, 'pytorch_model.bin'))

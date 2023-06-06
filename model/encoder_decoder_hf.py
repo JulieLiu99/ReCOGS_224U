@@ -506,7 +506,7 @@ class EncoderDecoderModel(PreTrainedModel):
         return self.decoder.set_output_embeddings(new_embeddings)
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
+    def from_pretrained(cls, pretrained_model_name_or_path, loss_type="original", *model_args, **kwargs):
         r"""
         Example:
         ```python
@@ -583,7 +583,7 @@ class EncoderDecoderModel(PreTrainedModel):
                 gc.collect()
 
                 model = EncoderDecoderModel.from_encoder_decoder_pretrained(
-                    encoder_dir, decoder_dir, encoder_from_tf=True, decoder_from_tf=True
+                    encoder_dir, decoder_dir, encoder_from_tf=True, decoder_from_tf=True, loss_type=loss_type
                 )
                 # This is only for copying some specific attributes of this particular model.
                 model.config = config
@@ -609,6 +609,7 @@ class EncoderDecoderModel(PreTrainedModel):
         cls,
         encoder_pretrained_model_name_or_path: str = None,
         decoder_pretrained_model_name_or_path: str = None,
+        loss_type: str = "original",
         *model_args,
         **kwargs
     ) -> PreTrainedModel:
@@ -739,7 +740,7 @@ class EncoderDecoderModel(PreTrainedModel):
 
         # instantiate config with corresponding kwargs
         config = EncoderDecoderConfig.from_encoder_decoder_configs(encoder.config, decoder.config, **kwargs)
-        return cls(encoder=encoder, decoder=decoder, config=config)
+        return cls(encoder=encoder, decoder=decoder, config=config, loss_type=loss_type)
 
     @add_start_docstrings_to_model_forward(ENCODER_DECODER_INPUTS_DOCSTRING)
     @replace_return_docstrings(output_type=Seq2SeqLMOutput, config_class=_CONFIG_FOR_DOC)
