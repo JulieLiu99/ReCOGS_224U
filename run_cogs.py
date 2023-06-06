@@ -1,4 +1,5 @@
 from utils.train_utils import *
+import datetime
 from datetime import date
 import json
 
@@ -103,7 +104,7 @@ for lf in args.lfs.split(";"):
         args.lf = lf
 
         model_name = args.model_name
-        run_name = f"cogs_pipeline.model.{model_name}.lf.{args.lf}.glove.{args.use_glove}.seed.{seed}"
+        run_name = f"cogs_pipeline.model.{model_name}.lf.{args.lf}.glove.{args.use_glove}.seed.{seed}.time.{datetime.datetime.now():%Y-%m-%d_%H:%M:%S}"
         if args.do_train == False:
             args.model_path = f"./{args.output_dir}/{run_name}/model-last/"
         
