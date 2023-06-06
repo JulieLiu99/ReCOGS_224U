@@ -19,7 +19,11 @@ import gc
 import os, math
 import tempfile
 import warnings
-from typing import Optional, Tuple, Union, Literal
+from typing import Optional, Tuple, Union
+try:
+    from typing import Literal
+except:
+    from typing_extensions import Literal
 
 import torch
 from torch import nn
