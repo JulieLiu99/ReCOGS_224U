@@ -602,7 +602,8 @@ class EncoderDecoderModel(PreTrainedModel):
             )
         kwargs["_fast_init"] = False
 
-        return super().from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
+        model = super().from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
+        model.loss_type = loss_type
 
     @classmethod
     def from_encoder_decoder_pretrained(
