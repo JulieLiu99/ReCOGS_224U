@@ -891,7 +891,7 @@ class EncoderDecoderModel(PreTrainedModel):
             rows = torch.arange(bs).unsqueeze(-1).repeat(1, nl).flatten()
 
             pred_3D = torch.zeros(bs, nt, nl).long()
-            pred_3D[rows, cols_x, cols_y] = pred.flatten()
+            pred_3D[rows, x.flatten(), y.flatten()] = pred.flatten()
 
             logits_4D = torch.zeros(bs, nt, nl, vs)
             logits_4D[rows, x.flatten(), y.flatten()] = logits.reshape(rows.shape[0], -1).float()
@@ -900,7 +900,7 @@ class EncoderDecoderModel(PreTrainedModel):
             mask_logits = torch.where(pred_3D == 0, torch.tensor(1), torch.tensor(0))
             mask_labels = torch.where(labels_3D == 0, torch.tensor(1), torch.tensor(0))
 
-            print(logits_4D.shape, labels_3D.shape, mask_logits.shape, mask_labels.shape)
+            # print(logits_4D.shape, labels_3D.shape, mask_logits.shape, mask_labels.shape)
             # torch.Size([116, 15, 106, 729]) torch.Size([116, 15, 106]) torch.Size([116, 15, 106]) torch.Size([116, 15, 106])
 
             loss1 = chamferToken(
@@ -914,7 +914,7 @@ class EncoderDecoderModel(PreTrainedModel):
 
             # divide Chamfer loss by 2 because it's sum of two way loss
             loss = (loss1/2 * AND_row_indices.size(0) + loss2 * no_AND_row_indices.size(0)) / (AND_row_indices.size(0) + no_AND_row_indices.size(0))
-            print("new loss", loss) # new loss tensor(6.6666, grad_fn=<DivBackward0>)
+            # print("new loss", loss) # new loss tensor(6.6666, grad_fn=<DivBackward0>)
 
 
         if not return_dict:
