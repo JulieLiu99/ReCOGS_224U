@@ -88,7 +88,6 @@ def minloss(loss_fn: Callable ,
     # Use the mask to assign a high value to the all-zero permutations in the loss tensor
     loss[mask] = float('inf')
 
-    print(labels)
     # loss before taking min: 
     # tensor([[4.6327, 4.6373, 4.6422, 4.6026, 4.6505, 4.6377,    inf,    inf,    inf,
     #         inf,    inf,    inf,    inf,    inf,    inf,    inf,    inf,    inf,
@@ -102,6 +101,9 @@ def minloss(loss_fn: Callable ,
     loss, _ = loss.min(dim=-1)
 
     # loss after taking min: tensor([4.6026, 6.6028], grad_fn=<MinBackward0>)
+
+    # Take the minimum loss over n_perm dimension
+    loss, _ = loss.min(dim=-1)
 
     return loss.mean()
 
