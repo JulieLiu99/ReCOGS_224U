@@ -853,8 +853,9 @@ class EncoderDecoderModel(PreTrainedModel):
             ################################# Loss of rows without AND #####################################
             elif self.loss_type == "chamfer":
                 device = labels.device
-                AND_row_indices = torch.nonzero(labels.eq(AND), as_tuple=True)[0].unique()
-                no_AND_row_indices = torch.masked_select(torch.arange(labels.size(0).to(device)), ~torch.isin(torch.arange(labels.size(0)).to(device), AND_row_indices))
+                AND_row_indices = torch.nonzero(labels.eq(AND).sum(dim=(-1))).flatten()
+                no_AND_row_indices = (labels.eq(AND).sum(dim=(-1)) == 0).nonzero().flatten()
+                # no_AND_row_indices = torch.masked_select(torch.arange(labels.size(0).to(device)), ~torch.isin(torch.arange(labels.size(0)).to(device), AND_row_indices))
 
                 loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
                 loss2 = loss_fct(
@@ -871,6 +872,7 @@ class EncoderDecoderModel(PreTrainedModel):
 
                     AND_in_labels = torch.where(labels == AND, 1, 0)
                     AND_in_pred = torch.where(pred == AND, 1, 0)
+                    print(AND_in_labels.sum(1))
 
                     max_AND_per_row = torch.max(AND_in_labels.sum(dim=1), AND_in_pred.sum(dim=1)).max().item()
                     nt = max_AND_per_row * 2 + 1
