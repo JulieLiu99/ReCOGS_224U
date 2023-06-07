@@ -856,12 +856,14 @@ class EncoderDecoderModel(PreTrainedModel):
                 AND_row_indices = torch.nonzero(labels.eq(AND).sum(dim=(-1))).flatten()
                 no_AND_row_indices = (labels.eq(AND).sum(dim=(-1)) == 0).nonzero().flatten()
                 # no_AND_row_indices = torch.masked_select(torch.arange(labels.size(0).to(device)), ~torch.isin(torch.arange(labels.size(0)).to(device), AND_row_indices))
-
-                loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
-                loss2 = loss_fct(
-                    logits[no_AND_row_indices, :, :].reshape(-1, self.decoder.config.vocab_size), 
-                    labels[no_AND_row_indices, :].view(-1), 
-                )
+                if no_AND_row_indices.any():
+                    loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
+                    loss2 = loss_fct(
+                        logits[no_AND_row_indices, :, :].reshape(-1, self.decoder.config.vocab_size), 
+                        labels[no_AND_row_indices, :].view(-1), 
+                    )
+                else:
+                    loss2 = 0.
 
                 ################################# Parse for rows with AND #####################################
                 if AND_row_indices.any():
@@ -870,8 +872,8 @@ class EncoderDecoderModel(PreTrainedModel):
 
                     pred = torch.argmax(logits, dim=-1) 
 
-                    AND_in_labels = torch.where(labels == AND, 1, 0)
-                    AND_in_pred = torch.where(pred == AND, 1, 0)
+                    AND_in_labels = labels == AND
+                    AND_in_pred = pred == AND
                     # print(AND_in_labels.sum(1))
                     # print(AND_in_pred.sum(1))
 
@@ -929,7 +931,6 @@ class EncoderDecoderModel(PreTrainedModel):
                         mask_b = mask_labels,
                         reduce = True
                         ) # Chamfer loss takes the most time
-                    print(loss1, loss2)
 
                     # divide Chamfer loss by 2 because it's sum of two way loss
                     loss = (loss1/2 * AND_row_indices.size(0) + loss2 * no_AND_row_indices.size(0)) / (AND_row_indices.size(0) + no_AND_row_indices.size(0))
