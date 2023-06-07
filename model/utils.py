@@ -56,6 +56,21 @@ def chamferToken(loss_fn: Callable ,
         return loss.mean()
     return loss
 
+
+def minloss(loss_fn: Callable , 
+             logits: Shaped[Tensor, "bs sentence_length vs"], 
+             labels: Shaped[Tensor, "bs n_perm sentence_length"], 
+             reduce: bool=True):
+    
+    # todo: get min loss   
+    bs, sentence_length, vs = logits.shape
+    bs, n_perm, sentence_length = labels.shape
+    loss = loss_fn(
+                logits.reshape(-1, vs), 
+                labels[:,0,:].reshape(-1), 
+                )
+    return loss
+
 class AverageMeter(object):
     def __init__(self):
         self.reset()
