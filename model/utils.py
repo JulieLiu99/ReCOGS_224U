@@ -62,14 +62,28 @@ def minloss(loss_fn: Callable ,
              labels: Shaped[Tensor, "bs n_perm sentence_length"], 
              reduce: bool=True):
     
-    # todo: get min loss   
     bs, sentence_length, vs = logits.shape
     bs, n_perm, sentence_length = labels.shape
-    loss = loss_fn(
-                logits.reshape(-1, vs), 
-                labels[:,0,:].reshape(-1), 
-                )
-    return loss
+
+    # loss = loss_fn(
+    #             logits.reshape(-1, vs), 
+    #             labels[:,0,:].reshape(-1), 
+    #             )
+
+    # Expand dimension of logits
+    logits_expanded = logits.unsqueeze(1).expand(-1, n_perm, -1, -1)
+
+    loss = loss_fn(logits_expanded.reshape(-1, vs), labels.reshape(-1))
+
+    loss = loss.reshape(bs, n_perm, sentence_length)
+
+    # Take the mean over sentence_length dimension (mean over a sentence)
+    loss = loss.mean(dim=-1)
+
+    # Take the minimum loss over n_perm dimension
+    loss, _ = loss.min(dim=-1)
+
+    return loss.mean()
 
 class AverageMeter(object):
     def __init__(self):
@@ -195,3 +209,4 @@ class NoamLR(lr_scheduler._LRScheduler):
     def get_lr(self):
         scale = self.scale(max(1,self._step_count))
         return [base_lr * scale for base_lr in self.base_lrs]
+
