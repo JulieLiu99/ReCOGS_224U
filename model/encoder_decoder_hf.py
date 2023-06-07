@@ -922,8 +922,8 @@ class EncoderDecoderModel(PreTrainedModel):
                         loss_fn = CrossEntropyLoss(reduction = 'none'),
                         a = logits_4D,
                         b = labels_3D,
-                        mask_a = mask_logits,
-                        mask_b = mask_labels,
+                        mask_a = mask_logits.bool(),
+                        mask_b = mask_labels.bool(),
                         reduce = True
                         ) # Chamfer loss takes the most time
 
