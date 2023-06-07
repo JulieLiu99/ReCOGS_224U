@@ -365,7 +365,7 @@ class EncoderDecoderModel(PreTrainedModel):
         config: Optional[PretrainedConfig] = None,
         encoder: Optional[PreTrainedModel] = None,
         decoder: Optional[PreTrainedModel] = None,
-        loss_type: Literal["original", "chamfer"]="original"
+        loss_type: Literal["original", "chamfer", "min"]="original"
     ):
         if config is None and (encoder is None or decoder is None):
             raise ValueError("Either a configuration or an encoder and a decoder has to be provided.")
@@ -403,7 +403,7 @@ class EncoderDecoderModel(PreTrainedModel):
         self.encoder.config = self.config.encoder
         self.decoder.config = self.config.decoder
         self.loss_type = loss_type
-        assert self.loss_type in ["original", "chamfer"]
+        assert self.loss_type in ["original", "chamfer", "min"]
         print(f"USING LOSS TYPE {self.loss_type}")
         
         # override the embeddings to be sinusoidal
@@ -842,7 +842,7 @@ class EncoderDecoderModel(PreTrainedModel):
         if labels is not None: # torch.Size([128, 109])
             warnings.warn(DEPRECATION_WARNING, FutureWarning)
             logits = decoder_outputs.logits if return_dict else decoder_outputs[0] # torch.Size([batch_size, sentence_length, vocab_size])
-            if self.loss_type == "original":
+            if self.loss_type == "original" :
                 loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
                 loss = loss_fct(
                     logits.reshape(-1, self.decoder.config.vocab_size), 
@@ -937,6 +937,8 @@ class EncoderDecoderModel(PreTrainedModel):
                     loss = loss2
                 # print("new loss", loss) # new loss tensor(6.6666, grad_fn=<DivBackward0>)
 
+            elif self.loss_type == "min":
+                assert("NOT IMPLEMENTED YET")
 
         if not return_dict:
             if loss is not None:
