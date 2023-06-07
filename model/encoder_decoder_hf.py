@@ -872,8 +872,8 @@ class EncoderDecoderModel(PreTrainedModel):
 
                     AND_in_labels = torch.where(labels == AND, 1, 0)
                     AND_in_pred = torch.where(pred == AND, 1, 0)
-                    print(AND_in_labels.sum(1))
-                    print(AND_in_pred.sum(1))
+                    # print(AND_in_labels.sum(1))
+                    # print(AND_in_pred.sum(1))
 
                     max_AND_per_row = torch.max(AND_in_labels.sum(dim=1), AND_in_pred.sum(dim=1)).max().item()
                     nt = max_AND_per_row * 2 + 1
@@ -893,7 +893,9 @@ class EncoderDecoderModel(PreTrainedModel):
                     rows = torch.arange(bs).to(device).unsqueeze(-1).repeat(1, nl).flatten()
 
                     labels_3D = torch.zeros(bs, nt, nl).long().to(device)
-                    labels_3D[rows, x.flatten(), y.flatten()] = labels.flatten()
+                    labels_3D[rows, x.flatten(), y.flatten()] = labels.flatten() # [bs, nl]
+                    
+                    # labels_3D = torch.gather(labels, 1, )
 
                     ################################# Map based on pred #####################################
 
@@ -913,8 +915,8 @@ class EncoderDecoderModel(PreTrainedModel):
                     logits_4D[rows, x.flatten(), y.flatten()] = logits.reshape(rows.shape[0], -1).float()
 
                     # True where there is padding, False otherwise
-                    mask_logits = torch.where(pred_3D == 0, 1, 0)
-                    mask_labels = torch.where(labels_3D == 0, 1, 0)
+                    mask_logits = pred_3D == 0
+                    mask_labels = labels_3D == 0
 
                     # print(logits_4D.shape, labels_3D.shape, mask_logits.shape, mask_labels.shape)
                     # torch.Size([116, 15, 106, 729]) torch.Size([116, 15, 106]) torch.Size([116, 15, 106]) torch.Size([116, 15, 106])
@@ -923,10 +925,11 @@ class EncoderDecoderModel(PreTrainedModel):
                         loss_fn = CrossEntropyLoss(reduction = 'none'),
                         a = logits_4D,
                         b = labels_3D,
-                        mask_a = mask_logits.bool(),
-                        mask_b = mask_labels.bool(),
+                        mask_a = mask_logits,
+                        mask_b = mask_labels,
                         reduce = True
                         ) # Chamfer loss takes the most time
+                    print(loss1, loss2)
 
                     # divide Chamfer loss by 2 because it's sum of two way loss
                     loss = (loss1/2 * AND_row_indices.size(0) + loss2 * no_AND_row_indices.size(0)) / (AND_row_indices.size(0) + no_AND_row_indices.size(0))
