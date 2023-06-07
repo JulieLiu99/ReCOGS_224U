@@ -40,7 +40,7 @@ from transformers import EncoderDecoderConfig
 from transformers.models.bert.modeling_bert import BertEmbeddings
 
 from utils.cogs_utils import *
-from model.utils import chamferToken
+from model.utils import *
 
 logger = logging.get_logger(__name__)
 
@@ -937,7 +937,7 @@ class EncoderDecoderModel(PreTrainedModel):
                         mask_b = mask_labels,
                         reduce = True
                         ) # Chamfer loss takes the most time
-                    print(loss1, loss2)
+                    # print(loss1, loss2)
 
                     # divide Chamfer loss by 2 because it's sum of two way loss
                     loss = (loss1/2 * AND_row_indices.size(0) + loss2 * no_AND_row_indices.size(0)) / (AND_row_indices.size(0) + no_AND_row_indices.size(0))
@@ -949,10 +949,7 @@ class EncoderDecoderModel(PreTrainedModel):
                 # print(labels_permutation.shape, labels.shape) # torch.Size([2, 24, 33]) torch.Size([2, 33])
                 # print(logits.shape) # torch.Size([2, 33, 729])
                 loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
-                loss = loss_fct(
-                    logits.reshape(-1, self.decoder.config.vocab_size), 
-                    labels.reshape(-1), 
-                )
+                loss = minloss(loss_fct, logits, labels_permutation)
                 print("min loss", loss)
 
         if not return_dict:
