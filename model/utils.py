@@ -62,14 +62,48 @@ def minloss(loss_fn: Callable ,
              labels: Shaped[Tensor, "bs n_perm sentence_length"], 
              reduce: bool=True):
     
-    # todo: get min loss   
     bs, sentence_length, vs = logits.shape
     bs, n_perm, sentence_length = labels.shape
-    loss = loss_fn(
-                logits.reshape(-1, vs), 
-                labels[:,0,:].reshape(-1), 
-                )
-    return loss
+
+    # loss = loss_fn(
+    #             logits.reshape(-1, vs), 
+    #             labels[:,0,:].reshape(-1), 
+    #             )
+
+    # Expand dimension of logits
+    logits_expanded = logits.unsqueeze(1).expand(-1, n_perm, -1, -1)
+
+    # Compute cross entropy loss for each permutation
+    loss = loss_fn(logits_expanded.reshape(-1, vs), labels.reshape(-1))
+
+    # Reshape the loss back to (bs, n_perm, sentence_length)
+    loss = loss.reshape(bs, n_perm, sentence_length)
+
+    # Take the mean over sentence_length dimension (mean over a sentence)
+    loss = loss.mean(dim=-1)
+
+    # Create a mask for all-zero permutations
+    mask = (labels.sum(dim=-1) == 0)
+
+    # Use the mask to assign a high value to the all-zero permutations in the loss tensor
+    loss[mask] = float('inf')
+
+    print(labels)
+    # loss before taking min: 
+    # tensor([[4.6327, 4.6373, 4.6422, 4.6026, 4.6505, 4.6377,    inf,    inf,    inf,
+    #         inf,    inf,    inf,    inf,    inf,    inf,    inf,    inf,    inf,
+    #         inf,    inf,    inf,    inf,    inf,    inf],
+    #     [6.6331, 6.6319, 6.6094, 6.6533, 6.6205, 6.6408, 6.6303, 6.6266, 6.6195,
+    #      6.6165, 6.6444, 6.6146, 6.6175, 6.6596, 6.6146, 6.6464, 6.6120, 6.6269,
+    #      6.6028, 6.6322, 6.6148, 6.6438, 6.6434, 6.6300]],
+    #    grad_fn=<IndexPutBackward0>)
+
+    # Take the minimum loss over n_perm dimension
+    loss, _ = loss.min(dim=-1)
+
+    # loss after taking min: tensor([4.6026, 6.6028], grad_fn=<MinBackward0>)
+
+    return loss.mean()
 
 class AverageMeter(object):
     def __init__(self):

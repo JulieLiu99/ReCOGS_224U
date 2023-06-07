@@ -948,9 +948,12 @@ class EncoderDecoderModel(PreTrainedModel):
             elif self.loss_type == "min":
                 # print(labels_permutation.shape, labels.shape) # torch.Size([2, 24, 33]) torch.Size([2, 33])
                 # print(logits.shape) # torch.Size([2, 33, 729])
-                loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
+                loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id, reduction='none')
                 loss = minloss(loss_fct, logits, labels_permutation)
-                print("min loss", loss)
+                # print("min loss", loss) # values look good
+
+
+        print("loss", self.loss_type, loss)
 
         if not return_dict:
             if loss is not None:
