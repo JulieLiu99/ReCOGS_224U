@@ -40,7 +40,7 @@ from transformers import EncoderDecoderConfig
 from transformers.models.bert.modeling_bert import BertEmbeddings
 
 from utils.cogs_utils import *
-from model.utils import chamferToken
+from model.utils import *
 
 logger = logging.get_logger(__name__)
 
@@ -365,7 +365,7 @@ class EncoderDecoderModel(PreTrainedModel):
         config: Optional[PretrainedConfig] = None,
         encoder: Optional[PreTrainedModel] = None,
         decoder: Optional[PreTrainedModel] = None,
-        loss_type: Literal["original", "chamfer"]="original"
+        loss_type: Literal["original", "chamfer", "min"]="original"
     ):
         if config is None and (encoder is None or decoder is None):
             raise ValueError("Either a configuration or an encoder and a decoder has to be provided.")
@@ -403,7 +403,7 @@ class EncoderDecoderModel(PreTrainedModel):
         self.encoder.config = self.config.encoder
         self.decoder.config = self.config.decoder
         self.loss_type = loss_type
-        assert self.loss_type in ["original", "chamfer"]
+        assert self.loss_type in ["original", "chamfer", "min"]
         print(f"USING LOSS TYPE {self.loss_type}")
         
         # override the embeddings to be sinusoidal
@@ -787,6 +787,14 @@ class EncoderDecoderModel(PreTrainedModel):
         >>> # generation
         >>> generated = model.generate(input_ids)
         ```"""
+
+        if self.loss_type == "min" :
+            labels_permutation = labels.reshape(labels.shape[0], 24, -1)
+            labels = labels_permutation[:,0,:]
+            # print(labels_permutation.shape, labels.shape) # torch.Size([2, 24, 33]) torch.Size([2, 33])
+        else:
+            labels = labels
+
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         kwargs_encoder = {argument: value for argument, value in kwargs.items() if not argument.startswith("decoder_")}
@@ -842,7 +850,7 @@ class EncoderDecoderModel(PreTrainedModel):
         if labels is not None: # torch.Size([128, 109])
             warnings.warn(DEPRECATION_WARNING, FutureWarning)
             logits = decoder_outputs.logits if return_dict else decoder_outputs[0] # torch.Size([batch_size, sentence_length, vocab_size])
-            if self.loss_type == "original":
+            if self.loss_type == "original" :
                 loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
                 loss = loss_fct(
                     logits.reshape(-1, self.decoder.config.vocab_size), 
@@ -931,6 +939,7 @@ class EncoderDecoderModel(PreTrainedModel):
                         mask_b = mask_labels,
                         reduce = True
                         ) # Chamfer loss takes the most time
+                    # print(loss1, loss2)
 
                     # divide Chamfer loss by 2 because it's sum of two way loss
                     loss = (loss1/2 * AND_row_indices.size(0) + loss2 * no_AND_row_indices.size(0)) / (AND_row_indices.size(0) + no_AND_row_indices.size(0))
@@ -938,6 +947,15 @@ class EncoderDecoderModel(PreTrainedModel):
                     loss = loss2
                 # print("new loss", loss) # new loss tensor(6.6666, grad_fn=<DivBackward0>)
 
+            elif self.loss_type == "min":
+                # print(labels_permutation.shape, labels.shape) # torch.Size([2, 24, 33]) torch.Size([2, 33])
+                # print(logits.shape) # torch.Size([2, 33, 729])
+                loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id, reduction='none')
+                loss = minloss(loss_fct, logits, labels_permutation)
+                # print("min loss", loss) # values look good
+
+
+        print("loss", self.loss_type, loss)
 
         if not return_dict:
             if loss is not None:

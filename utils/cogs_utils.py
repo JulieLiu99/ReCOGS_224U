@@ -200,6 +200,90 @@ class COGSDataset(Dataset):
             labels = batch[i][1] + [0] * (max_tgt_seq_lens - tgt_seq_lens[i])
             labels_batch += [labels]
 
+        # print("labels", torch.tensor(labels_batch).shape) # labels torch.Size([batch_size, max_tgt_seq_lens])
         return {"input_ids": torch.tensor(input_ids_batch),
                 "labels": torch.tensor(labels_batch),
+                "attention_mask": torch.tensor(mask_batch)}
+
+
+class COGSDatasetPermute(Dataset):
+    def __init__(
+        self, cogs_path, 
+        src_tokenizer, tgt_tokenizer,
+        partition, max_len=512, max_examples=-1,
+        least_to_most=False
+    ):
+        self._items = [] # ()
+        self.src_tokenizer = src_tokenizer
+        self.tgt_tokenizer = tgt_tokenizer
+    
+        self.eval_cat = []
+        is_gen_dev = False
+        if partition == "gen-dev":
+            partition = "gen"
+            is_gen_dev = True
+
+        for l in open(f"{cogs_path}/{partition}_concat.tsv", "r").readlines():
+            if max_examples != -1 and len(self._items) > max_examples:
+                break
+            text, sparse, cat, ground_truth = l.split("\t")
+            src_input_ids = src_tokenizer(text)
+            tgt_input_ids = []
+            for permutation in ground_truth.split(" | "):
+                tgt_input_ids.append(tgt_tokenizer(permutation.strip()))
+            self._items += [(src_input_ids, tgt_input_ids)]
+            self.eval_cat += [cat.strip()]
+            
+        if "train" in partition:
+            random.shuffle(self._items)
+            if least_to_most:
+                self._items = sorted(
+                    self._items, key = lambda i: len(i[0]), 
+                    reverse=False
+                )
+
+        if is_gen_dev:
+            # this is a strange partition accordingly to previous works.
+            # well, since other ppl are using this, i have to do it as well!
+            random.shuffle(self._items)
+            self._items = sorted(
+                self._items, key = lambda i: len(i[0]), 
+                reverse=True if not least_to_most else False
+            )
+            self._items = self._items[:len(self._items)//10]
+            
+    def __len__(self):
+        return len(self._items)
+
+    def __getitem__(self, item):
+        return self._items[item]
+    
+    def collate_batch(self, batch):
+        src_seq_lens = []
+        tgt_seq_lens = []
+        for i in range(len(batch)):
+            src_seq_lens += [len(batch[i][0])]
+            tgt_seq_lens.append(max([len(permutation) for permutation in batch[i][1]]))
+        max_src_seq_lens = max(src_seq_lens)
+        max_tgt_seq_lens = max(tgt_seq_lens)
+        
+        input_ids_batch = []
+        mask_batch = []
+        labels_batch = []
+        for i in range(len(batch)):
+            input_ids = batch[i][0] + [0] * (max_src_seq_lens - src_seq_lens[i])
+            input_ids_batch += [input_ids]
+            
+            mask = [1] * src_seq_lens[i] + [0] * (max_src_seq_lens - src_seq_lens[i])
+            mask_batch += [mask]
+            
+            labels_permute = []
+            for labels in batch[i][1]:
+                labels_permute += [labels + [0] * (max_tgt_seq_lens - tgt_seq_lens[i])]
+            labels_permute += [[0] * (max_tgt_seq_lens)] * (24 - len(labels_permute)) # 24 is hard coded now for max num of permutation each ground truth has
+            labels_batch += [labels_permute]
+
+        # print("in dataloader - labels", torch.tensor(labels_batch).shape) # labels torch.Size([batch_size, 24, max_tgt_seq_lens])
+        return {"input_ids": torch.tensor(input_ids_batch),
+                "labels": torch.tensor(labels_batch).reshape(len(batch), -1), # model expects 2d input_shape
                 "attention_mask": torch.tensor(mask_batch)}
