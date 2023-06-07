@@ -787,6 +787,14 @@ class EncoderDecoderModel(PreTrainedModel):
         >>> # generation
         >>> generated = model.generate(input_ids)
         ```"""
+
+        if self.loss_type == "min" :
+            labels_permutation = labels.reshape(labels.shape[0], 24, -1)
+            labels = labels_permutation[:,0,:]
+            # print(labels_permutation.shape, labels.shape) # torch.Size([2, 24, 33]) torch.Size([2, 33])
+        else:
+            labels = labels
+
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         kwargs_encoder = {argument: value for argument, value in kwargs.items() if not argument.startswith("decoder_")}
@@ -938,7 +946,14 @@ class EncoderDecoderModel(PreTrainedModel):
                 # print("new loss", loss) # new loss tensor(6.6666, grad_fn=<DivBackward0>)
 
             elif self.loss_type == "min":
-                assert("NOT IMPLEMENTED YET")
+                # print(labels_permutation.shape, labels.shape) # torch.Size([2, 24, 33]) torch.Size([2, 33])
+                # print(logits.shape) # torch.Size([2, 33, 729])
+                loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_token_id)
+                loss = loss_fct(
+                    logits.reshape(-1, self.decoder.config.vocab_size), 
+                    labels.reshape(-1), 
+                )
+                print("min loss", loss)
 
         if not return_dict:
             if loss is not None:

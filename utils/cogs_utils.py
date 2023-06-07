@@ -263,7 +263,7 @@ class COGSDatasetPermute(Dataset):
         tgt_seq_lens = []
         for i in range(len(batch)):
             src_seq_lens += [len(batch[i][0])]
-            tgt_seq_lens += [len(batch[i][1][0])]
+            tgt_seq_lens.append(max([len(permutation) for permutation in batch[i][1]]))
         max_src_seq_lens = max(src_seq_lens)
         max_tgt_seq_lens = max(tgt_seq_lens)
         
@@ -283,7 +283,7 @@ class COGSDatasetPermute(Dataset):
             labels_permute += [[0] * (max_tgt_seq_lens)] * (24 - len(labels_permute)) # 24 is hard coded now for max num of permutation each ground truth has
             labels_batch += [labels_permute]
 
-        # print("labels", torch.tensor(labels_batch).shape) # labels torch.Size([batch_size, 24, max_tgt_seq_lens])
+        # print("in dataloader - labels", torch.tensor(labels_batch).shape) # labels torch.Size([batch_size, 24, max_tgt_seq_lens])
         return {"input_ids": torch.tensor(input_ids_batch),
                 "labels": torch.tensor(labels_batch).reshape(len(batch), -1), # model expects 2d input_shape
                 "attention_mask": torch.tensor(mask_batch)}
