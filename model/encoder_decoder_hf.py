@@ -873,6 +873,7 @@ class EncoderDecoderModel(PreTrainedModel):
                     AND_in_labels = torch.where(labels == AND, 1, 0)
                     AND_in_pred = torch.where(pred == AND, 1, 0)
                     print(AND_in_labels.sum(1))
+                    print(AND_in_pred.sum(1))
 
                     max_AND_per_row = torch.max(AND_in_labels.sum(dim=1), AND_in_pred.sum(dim=1)).max().item()
                     nt = max_AND_per_row * 2 + 1
