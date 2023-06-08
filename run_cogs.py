@@ -161,7 +161,7 @@ for lf in args.lfs.split(";"):
             logging.info("Preparing training set to be least to most order.")
 
 
-        if args.loss_type == "min":
+        if args.loss_type == "min" and args.do_train == True:
             train_dataset = COGSDatasetPermute(
                 cogs_path=args.data_path, 
                 src_tokenizer=src_tokenizer, 
