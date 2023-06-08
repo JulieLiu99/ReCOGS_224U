@@ -21,6 +21,7 @@ if __name__ == '__main__':
             type=str, help='path to the decoder config'
         )
         cmd.add_argument('--max_seq_len', default=512, type=int)
+        cmd.add_argument('--expname', default="default", type=str)
         cmd.add_argument('--seeds', default="42;66;77;88;99", type=str)
         cmd.add_argument('--gradient_accumulation_steps', default=1, type=int)
         cmd.add_argument('--output_dir', required=True, type=str, help='save dir')
@@ -104,7 +105,7 @@ for lf in args.lfs.split(";"):
         args.lf = lf
 
         model_name = args.model_name
-        run_name = f"cogs_pipeline.model.{model_name}.lf.{args.lf}.glove.{args.use_glove}.seed.{seed}.time.{datetime.datetime.now():%Y-%m-%d_%H:%M:%S}"
+        run_name = f"{args.expname}.cogs_pipeline.model.{model_name}.lf.{args.lf}.glove.{args.use_glove}.seed.{seed}.time.{datetime.datetime.now():%Y-%m-%d_%H:%M:%S}"
         if args.do_train == False:
             args.model_path = f"./{args.output_dir}/{run_name}/model-last/"
         

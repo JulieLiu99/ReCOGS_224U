@@ -955,7 +955,7 @@ class EncoderDecoderModel(PreTrainedModel):
                 # print("min loss", loss) # values look good
 
 
-        print("loss", self.loss_type, loss)
+        # print("loss", self.loss_type, loss)
 
         if not return_dict:
             if loss is not None:
