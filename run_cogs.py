@@ -176,45 +176,7 @@ for lf in args.lfs.split(";"):
                 sampler=SequentialSampler(train_dataset),
                 collate_fn=train_dataset.collate_batch
             )
-
-            eval_dataset = COGSDatasetPermute(
-                cogs_path=args.data_path, 
-                src_tokenizer=src_tokenizer, 
-                tgt_tokenizer=tgt_tokenizer, 
-                partition=find_partition_name("dev", args.lf),
-            )
-            eval_dataloader = DataLoader(
-                eval_dataset, batch_size=args.eval_batch_size, 
-                sampler=SequentialSampler(eval_dataset),
-                collate_fn=train_dataset.collate_batch
-            )
-
-            test_dataset = COGSDatasetPermute(
-                cogs_path=args.data_path, 
-                src_tokenizer=src_tokenizer, 
-                tgt_tokenizer=tgt_tokenizer, 
-                partition=find_partition_name("test", args.lf),
-            )
-            test_dataloader = DataLoader(
-                test_dataset, batch_size=args.eval_batch_size, 
-                sampler=SequentialSampler(test_dataset),
-                collate_fn=train_dataset.collate_batch
-            )
-
-            gen_dataset = COGSDatasetPermute(
-                cogs_path=args.data_path, 
-                src_tokenizer=src_tokenizer, 
-                tgt_tokenizer=tgt_tokenizer, 
-                partition=find_partition_name("gen", args.lf),
-            )
-            gen_dataloader = DataLoader(
-                gen_dataset, batch_size=args.eval_batch_size, 
-                sampler=SequentialSampler(gen_dataset),
-                collate_fn=train_dataset.collate_batch
-            )
-
         else:
-
             train_dataset = COGSDataset(
                 cogs_path=args.data_path, 
                 src_tokenizer=src_tokenizer, 
@@ -230,41 +192,41 @@ for lf in args.lfs.split(";"):
                 collate_fn=train_dataset.collate_batch
             )
 
-            eval_dataset = COGSDataset(
-                cogs_path=args.data_path, 
-                src_tokenizer=src_tokenizer, 
-                tgt_tokenizer=tgt_tokenizer, 
-                partition=find_partition_name("dev", args.lf),
-            )
-            eval_dataloader = DataLoader(
-                eval_dataset, batch_size=args.eval_batch_size, 
-                sampler=SequentialSampler(eval_dataset),
-                collate_fn=train_dataset.collate_batch
-            )
+        eval_dataset = COGSDataset(
+            cogs_path=args.data_path, 
+            src_tokenizer=src_tokenizer, 
+            tgt_tokenizer=tgt_tokenizer, 
+            partition=find_partition_name("dev", args.lf),
+        )
+        eval_dataloader = DataLoader(
+            eval_dataset, batch_size=args.eval_batch_size, 
+            sampler=SequentialSampler(eval_dataset),
+            collate_fn=train_dataset.collate_batch
+        )
 
-            test_dataset = COGSDataset(
-                cogs_path=args.data_path, 
-                src_tokenizer=src_tokenizer, 
-                tgt_tokenizer=tgt_tokenizer, 
-                partition=find_partition_name("test", args.lf),
-            )
-            test_dataloader = DataLoader(
-                test_dataset, batch_size=args.eval_batch_size, 
-                sampler=SequentialSampler(test_dataset),
-                collate_fn=train_dataset.collate_batch
-            )
+        test_dataset = COGSDataset(
+            cogs_path=args.data_path, 
+            src_tokenizer=src_tokenizer, 
+            tgt_tokenizer=tgt_tokenizer, 
+            partition=find_partition_name("test", args.lf),
+        )
+        test_dataloader = DataLoader(
+            test_dataset, batch_size=args.eval_batch_size, 
+            sampler=SequentialSampler(test_dataset),
+            collate_fn=train_dataset.collate_batch
+        )
 
-            gen_dataset = COGSDataset(
-                cogs_path=args.data_path, 
-                src_tokenizer=src_tokenizer, 
-                tgt_tokenizer=tgt_tokenizer, 
-                partition=find_partition_name("gen", args.lf),
-            )
-            gen_dataloader = DataLoader(
-                gen_dataset, batch_size=args.eval_batch_size, 
-                sampler=SequentialSampler(gen_dataset),
-                collate_fn=train_dataset.collate_batch
-            )
+        gen_dataset = COGSDataset(
+            cogs_path=args.data_path, 
+            src_tokenizer=src_tokenizer, 
+            tgt_tokenizer=tgt_tokenizer, 
+            partition=find_partition_name("gen", args.lf),
+        )
+        gen_dataloader = DataLoader(
+            gen_dataset, batch_size=args.eval_batch_size, 
+            sampler=SequentialSampler(gen_dataset),
+            collate_fn=train_dataset.collate_batch
+        )
         
         if model_name == "ende_transformer":
             logging.info("Baselining the Transformer Encoder-Decoder Model")
