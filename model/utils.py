@@ -102,9 +102,6 @@ def minloss(loss_fn: Callable ,
 
     # loss after taking min: tensor([4.6026, 6.6028], grad_fn=<MinBackward0>)
 
-    # Take the minimum loss over n_perm dimension
-    loss, _ = loss.min(dim=-1)
-
     return loss.mean()
 
 class AverageMeter(object):
